@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, History, Grid, List, Plus } from 'lucide-react';
+import { Search, History, Grid, List, Plus, Filter } from 'lucide-react';
 
 const ControlsBar = ({ 
   activeTab, 
@@ -15,101 +15,130 @@ const ControlsBar = ({
   categories
 }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-gray-800 rounded-xl p-4 mb-6 shadow-lg border border-gray-700">
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-        {/* Onglets */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+        {/* Section gauche : Onglets */}
+        <div className="flex gap-1 bg-gray-700 p-1 rounded-lg">
           <button
             onClick={() => { setActiveTab('normaux'); setFilterCategory('all'); setSearchTerm(''); }}
-            className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
               activeTab === 'normaux'
-                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-300 hover:text-white hover:bg-gray-600'
             }`}
           >
-            Produits
+            Normaux
           </button>
           <button
             onClick={() => { setActiveTab('sensibles'); setFilterCategory('all'); setSearchTerm(''); }}
-            className={`px-4 py-2 rounded-md font-medium text-sm transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
               activeTab === 'sensibles'
-                ? 'bg-white dark:bg-gray-600 text-purple-600 dark:text-purple-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-300 hover:text-white hover:bg-gray-600'
             }`}
           >
             Sensibles
           </button>
         </div>
 
-        {/* Recherche et filtres */}
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 lg:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+        {/* Section centrale : Recherche et Filtres */}
+        <div className="flex-1 flex flex-col sm:flex-row gap-3 items-center">
+          {/* Recherche */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+              <Search className="h-3.5 w-3.5 text-gray-400" />
+            </div>
             <input
               type="text"
               placeholder="Rechercher..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              className="block w-full pl-9 pr-3 py-1.5 text-sm bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
 
-          <button
-            onClick={() => { setShowHistory(true); }}
-            className="px-6 py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold flex items-center gap-2 transition-colors"
-            title="Voir l'historique"
-          >
-            <History className="w-4 h-4" />
-            Historique
-          </button>
-          
-          <div className="flex gap-2">
+          {/* Filtre par catégorie */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+              <Filter className="h-3.5 w-3.5 text-gray-400" />
+            </div>
             <select
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              className="pl-8 pr-6 py-1.5 text-sm bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-1 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
             >
-              <option value="all">Toutes catégories</option>
+              <option value="all" className="bg-gray-800">Toutes catégories</option>
               {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat} value={cat} className="bg-gray-800">{cat}</option>
               ))}
             </select>
-
-            {/* Boutons de vue */}
-            <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-md transition-all ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-              >
-                <Grid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`p-2 rounded-md transition-all ${
-                  viewMode === 'table'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
+            <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 pointer-events-none">
+              <svg className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
-            
+          </div>
+        </div>
+
+        {/* Section droite : Actions */}
+        <div className="flex gap-2">
+          {/* Bouton Historique */}
+          <button
+            onClick={() => { setShowHistory(true); }}
+            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-200 border border-gray-600 hover:border-gray-500"
+            title="Voir l'historique"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Historique</span>
+          </button>
+
+          {/* Boutons de vue */}
+          <div className="flex bg-gray-700 p-0.5 rounded-lg border border-gray-600">
             <button
-              onClick={() => { setEditingProduct({ isSensible: activeTab === 'sensibles' }); setShowForm(true); }}
-              className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center gap-2 transition-all ${
-                activeTab === 'sensibles'
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
               }`}
+              title="Vue grille"
             >
-              <Plus className="w-4 h-4" />
-              Ajouter
+              <Grid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-all duration-200 ${
+                viewMode === 'table'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
+              }`}
+              title="Vue tableau"
+            >
+              <List className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Bouton Ajouter */}
+          <button
+            onClick={() => { setEditingProduct({ isSensible: activeTab === 'sensibles' }); setShowForm(true); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all duration-200 ${
+              activeTab === 'sensibles'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Ajouter</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Info sur le nombre de résultats */}
+      <div className="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
+        <div className="text-xs text-gray-400">
+          {activeTab === 'normaux' ? 'Produits normaux' : 'Produits sensibles'}
+        </div>
+        <div className="text-xs text-gray-400">
+          Vue: {viewMode === 'grid' ? 'Grille' : 'Tableau'}
         </div>
       </div>
     </div>

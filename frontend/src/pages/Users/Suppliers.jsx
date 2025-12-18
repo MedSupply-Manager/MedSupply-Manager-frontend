@@ -41,7 +41,7 @@ const BuyingPage = () => {
         { path: '/dashboard', icon: BarChart3, label: 'Tableau de Bord' },
         { path: '/products', icon: Package, label: 'Gestion Produits' },
         { path: '/suppliers', icon: Truck, label: 'Commandes Fournisseurs' },
-        { path: '/orders', icon: ShoppingCart, label: 'Commandes Clients' },
+   
     ];
 
     // Fetch products from API

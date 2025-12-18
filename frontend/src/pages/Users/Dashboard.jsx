@@ -1,28 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; // Add these imports
 import ControlsBar from '../../components/ControlsBar';
 import ProductCard from '../../components/ProductCard';
 import ProductTable from '../../components/ProductTable';
 import Loader from '../../components/Loader';
+import ProductFormModal from '../../modals/ProductFormModal';
+import ProductDetailModal from '../../modals/ProductDetailModal';
+import HistoryModal from '../../modals/HistoryModal';
+import InfoModal from '../../modals/InfoModal';
 import { Package, Truck, BarChart3, Menu, X, LogOut, ChevronRight, Home, AlertTriangle } from 'lucide-react';
 import { fetchProducts, deleteProduct } from '../../utils/api';
-
+import { API_URL } from '../../utils/constants';
+import { useAuth } from '../../context/AuthContext';
 const Dashboard = ({ 
-  activeTab, 
-  setActiveTab, 
-  setShowForm, 
-  setEditingProduct, 
-  setShowHistory,
-  setSelectedProduct,
-  onEditProduct,
   onLogout,
   user
 }) => {
+  // Forcer le dark mode
+  useEffect(() => {
+    document.documentElement.classList.remove('light');
+    document.documentElement.classList.add('dark');
+  }, []);
+
+
+  // États pour la sidebar et la navigation
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  
+  const [activeMenu, setActiveMenu] = useState('/products');
+  const { logout } = useAuth();
+  // États pour les produits
   const [produits, setProduits] = useState([]);
   const [produitsSensibles, setProduitsSensibles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('normaux');
   const [filterCategory, setFilterCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('grid');
@@ -33,46 +41,70 @@ const Dashboard = ({
     totalValeur: 0
   });
 
-  // Add useNavigate and useLocation hooks
-  const navigate = useNavigate();
-  const location = useLocation();
-  const activeMenu = location.pathname; // This will auto-detect active route
-  
-  // Menu items with correct paths (remove http://localhost:5173)
+  // États pour les modals
+  const [showForm, setShowForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [historique, setHistorique] = useState([]);
+
+  // Menu items
   const menuItems = [
-    { path: '/', icon: Home, label: 'Accueil' }, // Changed from http://localhost:5173/dashboard
-    { path: '/products', icon: Package, label: 'Produits' },
-    { path: '/suppliers', icon: Truck, label: 'Fournisseurs' },
-    // Add other routes you want to navigate to
+    { path: '/dashboard', icon: BarChart3, label: 'Tableau de Bord' },
+    { path: '/products', icon: Package, label: 'Gestion Produits' },
+    { path: '/suppliers', icon: Truck, label: 'Commandes Fournisseurs' },
   ];
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  const fetchHistorique = async () => {
+    try {
+      const response = await fetch(`${API_URL}/historique`);
+      if (!response.ok) throw new Error('Erreur lors de la récupération de l\'historique');
+      const data = await response.json();
+      setHistorique(data);
+    } catch (error) {
+      console.error('Erreur fetchHistorique:', error);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
       const data = await fetchProducts();
-      setProduits(data.normaux);
-      setProduitsSensibles(data.sensibles);
+      setProduits(data.normaux || []);
+      setProduitsSensibles(data.sensibles || []);
       
-      const alertesCount = [...data.normaux, ...data.sensibles].filter(
+      const allProducts = [...(data.normaux || []), ...(data.sensibles || [])];
+      const alertesCount = allProducts.filter(
         p => p.quantite <= p.seuil_alerte
       ).length;
       
-      const totalValeur = [...data.normaux, ...data.sensibles].reduce(
+      const totalValeur = allProducts.reduce(
         (sum, p) => sum + (p.prix * p.quantite), 0
       );
       
       setStats({
-        normaux: data.normaux.length,
-        sensibles: data.sensibles.length,
+        normaux: data.normaux?.length || 0,
+        sensibles: data.sensibles?.length || 0,
         alertes: alertesCount,
         totalValeur: totalValeur
       });
     } catch (error) {
       console.error('Erreur chargement données:', error);
+      // Données de test
+      setProduits([
+        { id: 1, nom: 'Test Product', description: 'Test Description', prix: 10.5, categorie: 'Analgésiques', quantite: 25, seuil_alerte: 10, image_url: '' }
+      ]);
+      setStats({
+        normaux: 1,
+        sensibles: 0,
+        alertes: 0,
+        totalValeur: 262.5
+      });
     }
     setLoading(false);
   };
@@ -83,20 +115,38 @@ const Dashboard = ({
     try {
       await deleteProduct(id, isSensible);
       fetchData();
+      alert('Produit supprimé avec succès');
     } catch (error) {
       console.error('Erreur suppression:', error);
+      alert('Erreur lors de la suppression du produit');
     }
   };
 
-  const handleLogout = () => {
-    if (onLogout) {
-      onLogout();
-    }
+  const handleEditProduct = (product, isSensible) => {
+    setEditingProduct({ ...product, isSensible });
+    setShowForm(true);
   };
 
-  // FIXED: Use navigate instead of window.location.href
+  const handleViewProduct = (product) => {
+    setSelectedProduct(product);
+  };
+
+  const handleOpenHistory = async () => {
+    setShowHistory(true);
+    await fetchHistorique();
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+};
+
   const handleNavigation = (path) => {
-    navigate(path);
+    if (path === '/products') {
+      setActiveMenu(path);
+    } else {
+      window.location.href = path;
+    }
   };
 
   const categories = activeTab === 'normaux' 
@@ -107,27 +157,174 @@ const Dashboard = ({
     .filter(p => 
       (filterCategory === 'all' || p.categorie === filterCategory) &&
       (p.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       p.description.toLowerCase().includes(searchTerm.toLowerCase()))
+       (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase())))
     );
 
+  // Si on n'est pas sur la page des produits
+  if (activeMenu !== '/products') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+        {/* Sidebar */}
+        <aside
+          className={`fixed left-0 top-0 z-40 h-screen transition-transform duration-300 ease-in-out ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 w-64`}
+        >
+          <div className="h-full bg-gray-800 backdrop-blur-xl border-r border-gray-700 flex flex-col">
+            {/* Logo */}
+            <div className="p-6 border-b border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">PS</span>
+                </div>
+                <div>
+                  <h2 className="font-bold text-lg text-white">PharmaStock</h2>
+                  <p className="text-xs text-gray-400">Gestion de Stock</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation principale */}
+            <nav className="flex-1 p-4 overflow-y-auto">
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
+                  Navigation
+                </h3>
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeMenu === item.path;
+
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => handleNavigation(item.path)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                        active
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                          : 'text-gray-300 hover:bg-gray-700 hover:shadow-md'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="font-medium">{item.label}</span>
+                      {active && <ChevronRight className="w-4 h-4 ml-auto" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+
+            {/* User Info & Logout */}
+            <div className="p-4 border-t border-gray-700">
+              <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-700">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white font-semibold text-sm">
+                    {user?.username?.charAt(0).toUpperCase() || 'A'}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white truncate">
+                    {user?.username || 'Admin'}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {user?.email || 'admin@pharmastock.com'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 border border-red-800 hover:border-red-700 transition-all duration-200"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="font-medium">Déconnexion</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : ''}`}>
+          {/* Top Bar */}
+          <header className="bg-gray-800/80 backdrop-blur-xl border-b border-gray-700 sticky top-0 z-30">
+            <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="p-2 hover:bg-gray-700 rounded-lg transition-all duration-200"
+                >
+                  {sidebarOpen ? (
+                    <X className="w-5 h-5 text-gray-300" />
+                  ) : (
+                    <Menu className="w-5 h-5 text-gray-300" />
+                  )}
+                </button>
+                <div>
+                  <h1 className="text-lg font-semibold text-white">
+                    {activeMenu === '/suppliers' ? 'Fournisseurs' : 'Tableau de bord'}
+                  </h1>
+                  <p className="text-sm text-gray-400">
+                    {activeMenu === '/suppliers' ? 'Gestion des fournisseurs' : 'Vue d\'ensemble'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Contenu de la page active */}
+          <main className="p-6">
+            {activeMenu === '/dashboard' && (
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-white mb-4">
+                  Bienvenue sur PharmaStock
+                </h2>
+                <p className="text-gray-400">
+                  Sélectionnez une section dans le menu de gauche pour commencer.
+                </p>
+              </div>
+            )}
+
+            {activeMenu === '/suppliers' && (
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-white mb-4">
+                  Gestion des Fournisseurs
+                </h2>
+                <p className="text-gray-400">
+                  Cette section est en cours de développement.
+                </p>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* Mobile Overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Page des produits
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Sidebar simplifiée */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      {/* Sidebar */}
       <aside
         className={`fixed left-0 top-0 z-40 h-screen transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 w-64`}
       >
-        <div className="h-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <div className="h-full bg-gray-800 backdrop-blur-xl border-r border-gray-700 flex flex-col">
           {/* Logo */}
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="p-6 border-b border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                 <span className="text-white font-bold text-xl">PS</span>
               </div>
               <div>
-                <h2 className="font-bold text-lg text-gray-800 dark:text-white">PharmaStock</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Gestion de Stock</p>
+                <h2 className="font-bold text-lg text-white">PharmaStock</h2>
+                <p className="text-xs text-gray-400">Gestion de Stock</p>
               </div>
             </div>
           </div>
@@ -135,7 +332,7 @@ const Dashboard = ({
           {/* Navigation principale */}
           <nav className="flex-1 p-4 overflow-y-auto">
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-2">
                 Navigation
               </h3>
               {menuItems.map((item) => {
@@ -148,8 +345,8 @@ const Dashboard = ({
                     onClick={() => handleNavigation(item.path)}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                       active
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:shadow-md'
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : 'text-gray-300 hover:bg-gray-700 hover:shadow-md'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -162,25 +359,25 @@ const Dashboard = ({
           </nav>
 
           {/* User Info & Logout */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-500 rounded-full flex items-center justify-center shadow-md">
+          <div className="p-4 border-t border-gray-700">
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-700">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-md">
                 <span className="text-white font-semibold text-sm">
                   {user?.username?.charAt(0).toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm text-gray-800 dark:text-white truncate">
+                <p className="font-medium text-sm text-white truncate">
                   {user?.username || 'Admin'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                <p className="text-xs text-gray-400 truncate">
                   {user?.email || 'admin@pharmastock.com'}
                 </p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-800 hover:border-red-300 dark:hover:border-red-700 transition-all duration-200"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 border border-red-800 hover:border-red-700 transition-all duration-200"
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Déconnexion</span>
@@ -192,24 +389,24 @@ const Dashboard = ({
       {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : ''}`}>
         {/* Top Bar */}
-        <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+        <header className="bg-gray-800/80 backdrop-blur-xl border-b border-gray-700 sticky top-0 z-30">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+                className="p-2 hover:bg-gray-700 rounded-lg transition-all duration-200"
               >
                 {sidebarOpen ? (
-                  <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  <X className="w-5 h-5 text-gray-300" />
                 ) : (
-                  <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  <Menu className="w-5 h-5 text-gray-300" />
                 )}
               </button>
               <div>
-                <h1 className="text-lg font-semibold text-gray-800 dark:text-white">
+                <h1 className="text-lg font-semibold text-white">
                   {activeTab === 'normaux' ? 'Médicaments Normaux' : 'Produits Sensibles'}
                 </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-400">
                   Gestion et surveillance des stocks
                 </p>
               </div>
@@ -217,8 +414,8 @@ const Dashboard = ({
 
             <div className="flex items-center gap-4">
               {/* Bouton Alertes */}
-              <button className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200">
-                <AlertTriangle className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              <button className="relative p-2 hover:bg-gray-700 rounded-lg transition-all duration-200">
+                <AlertTriangle className="w-5 h-5 text-gray-300" />
                 {stats.alertes > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
                     {stats.alertes}
@@ -229,16 +426,39 @@ const Dashboard = ({
           </div>
         </header>
 
-        {/* Rest of your code remains the same */}
+        {/* Contenu principal des produits */}
         <main className="p-6">
           <div className="space-y-6">
-            {/* Stats Cards avec design amélioré */}
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* ... rest of your stats cards ... */}
+              <StatCard 
+                icon={<Package className="w-5 h-5" />}
+                value={stats.normaux}
+                label="Produits Normaux"
+                color="blue"
+              />
+              <StatCard 
+                icon={<BarChart3 className="w-5 h-5" />}
+                value={stats.sensibles}
+                label="Produits Sensibles"
+                color="purple"
+              />
+              <StatCard 
+                icon={<AlertTriangle className="w-5 h-5" />}
+                value={stats.alertes}
+                label="Alertes Stock"
+                color="orange"
+              />
+              <StatCard 
+                icon={<BarChart3 className="w-5 h-5" />}
+                value={`${stats.totalValeur.toFixed(0)}€`}
+                label="Valeur Totale"
+                color="green"
+              />
             </div>
 
             {/* Controls Bar */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+            <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-700">
               <ControlsBar
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
@@ -249,7 +469,7 @@ const Dashboard = ({
                 setViewMode={setViewMode}
                 setShowForm={setShowForm}
                 setEditingProduct={setEditingProduct}
-                setShowHistory={setShowHistory}
+                setShowHistory={handleOpenHistory}
                 categories={categories}
               />
             </div>
@@ -264,26 +484,29 @@ const Dashboard = ({
                     key={product.id}
                     product={product}
                     isSensible={activeTab === 'sensibles'}
-                    onEdit={() => onEditProduct(product, activeTab === 'sensibles')}
+                    onEdit={() => handleEditProduct(product, activeTab === 'sensibles')}
                     onDelete={() => handleDelete(product.id, activeTab === 'sensibles')}
-                    onView={() => setSelectedProduct(product)}
+                    onView={() => handleViewProduct(product)}
                   />
                 ))}
               </div>
             ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="bg-gray-800 rounded-2xl shadow-lg border border-gray-700 overflow-hidden">
                 <ProductTable
                   products={filteredProducts}
                   isSensible={activeTab === 'sensibles'}
-                  onEdit={onEditProduct}
+                  onEdit={handleEditProduct}
                   onDelete={handleDelete}
-                  onView={setSelectedProduct}
+                  onView={handleViewProduct}
                 />
               </div>
             )}
 
             {filteredProducts.length === 0 && !loading && (
-              <EmptyState />
+              <EmptyState onAddProduct={() => {
+                setEditingProduct({ isSensible: activeTab === 'sensibles' });
+                setShowForm(true);
+              }} />
             )}
           </div>
         </main>
@@ -296,22 +519,82 @@ const Dashboard = ({
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* Modals */}
+      {showForm && (
+        <ProductFormModal
+          product={editingProduct}
+          onClose={() => { setShowForm(false); setEditingProduct(null); }}
+          activeTab={activeTab}
+        />
+      )}
+
+      {showInfo && (
+        <InfoModal onClose={() => setShowInfo(false)} />
+      )}
+
+      {showHistory && (
+        <HistoryModal 
+          historique={historique} 
+          onClose={() => setShowHistory(false)} 
+          darkMode={true}
+        />
+      )}
+
+      {selectedProduct && (
+        <ProductDetailModal
+          product={selectedProduct}
+          isSensible={activeTab === 'sensibles'}
+          onClose={() => setSelectedProduct(null)}
+          onEdit={() => {
+            setSelectedProduct(null);
+            handleEditProduct(selectedProduct, activeTab === 'sensibles');
+          }}
+        />
+      )}
     </div>
   );
 };
 
-const EmptyState = () => (
-  <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center shadow-lg border border-gray-100 dark:border-gray-700">
-    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-2xl flex items-center justify-center">
-      <Package className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+// Composants auxiliaires
+const StatCard = ({ icon, value, label, color }) => {
+  const colorClasses = {
+    blue: 'bg-blue-500 text-white',
+    purple: 'bg-purple-500 text-white',
+    orange: 'bg-orange-500 text-white',
+    green: 'bg-green-500 text-white'
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 hover:shadow-xl transition-shadow duration-200">
+      <div className="flex items-center gap-4">
+        <div className={`p-3 rounded-xl ${colorClasses[color]} shadow-md`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-white">{value}</div>
+          <div className="text-sm text-gray-400">{label}</div>
+        </div>
+      </div>
     </div>
-    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+  );
+};
+
+const EmptyState = ({ onAddProduct }) => (
+  <div className="bg-gray-800 rounded-2xl p-12 text-center shadow-lg border border-gray-700">
+    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl flex items-center justify-center">
+      <Package className="w-10 h-10 text-gray-500" />
+    </div>
+    <h3 className="text-xl font-bold text-white mb-2">
       Aucun produit trouvé
     </h3>
-    <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+    <p className="text-gray-400 mb-6 max-w-md mx-auto">
       Aucun produit ne correspond à vos critères de recherche. Essayez de modifier vos filtres ou ajoutez de nouveaux produits.
     </p>
-    <button className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-lg shadow-primary-500/25 transition-all duration-200">
+    <button 
+      onClick={onAddProduct}
+      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 transition-all duration-200"
+    >
       Ajouter un produit
     </button>
   </div>

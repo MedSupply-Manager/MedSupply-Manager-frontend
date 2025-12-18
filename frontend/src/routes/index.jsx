@@ -98,13 +98,15 @@ const AppRoutes = () => {
                 }
             />
             <Route path="/suppliers"
-            element={
+            element={ <ProtectedRoute requiredRole="admin_fournisseur">
                 <BuyingPage />
-
+               </ProtectedRoute>
             } />
              <Route path="/products"
             element={
+                <ProtectedRoute requiredRole="admin_fournisseur">
                 <Productpage />
+                </ProtectedRoute>
             } />
             {/* 404 Not Found */}
             <Route path="*" element={<NotFound />} />
