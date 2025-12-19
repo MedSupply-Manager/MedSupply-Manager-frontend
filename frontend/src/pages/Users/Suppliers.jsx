@@ -15,9 +15,13 @@ import {
     Minus,
     ShoppingBag,
     Trash2,
-    Check
+    Check,
+    Users,
+    FileText,
+    ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+
 const BuyingPage = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -26,11 +30,18 @@ const BuyingPage = () => {
     const [showCart, setShowCart] = useState(false);
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showManufacturersModal, setShowManufacturersModal] = useState(false);
+    const [manufacturers, setManufacturers] = useState([]);
+    const [selectedManufacturerDeals, setSelectedManufacturerDeals] = useState(null);
+    const [deals, setDeals] = useState([]);
+    const [loadingDeals, setLoadingDeals] = useState(false);
+    const [productManufacturers, setProductManufacturers] = useState([]); // For filter dropdown
 
     const navigate = useNavigate();
     const location = useLocation();
-    const activeMenu = location.pathname; // Auto-detect active route
+    const activeMenu = location.pathname;
     const { logout } = useAuth();
+    
     // Mock user data
     const user = {
         username: 'John Doe',
@@ -41,7 +52,6 @@ const BuyingPage = () => {
         { path: '/dashboard', icon: BarChart3, label: 'Tableau de Bord' },
         { path: '/products', icon: Package, label: 'Gestion Produits' },
         { path: '/suppliers', icon: Truck, label: 'Commandes Fournisseurs' },
-   
     ];
 
     // Fetch products from API
@@ -53,6 +63,9 @@ const BuyingPage = () => {
                 if (response.ok) {
                     const data = await response.json();
                     setProducts(data);
+                    // Extract manufacturers from products for filter dropdown
+                    const uniqueManufacturers = [...new Set(data.map(p => p.nom_fabricant))].filter(Boolean);
+                    setProductManufacturers(uniqueManufacturers);
                 } else {
                     console.error('Failed to fetch products');
                 }
@@ -66,40 +79,38 @@ const BuyingPage = () => {
         fetchProducts();
     }, []);
 
-
     const handleLogout = async () => {
         await logout();
         navigate('/login');
     };
+
     const fetchCartItems = async () => {
         try {
-          const res = await fetch("http://localhost:5002/api/cart");
-          if (!res.ok) throw new Error("Failed to fetch cart");
-      
-          const cartItems = await res.json();
-          // cartItems = [{ id, product_id, quantity }]
-      
-          // Map backend cart items to frontend cart shape
-          const enrichedCart = cartItems.map(cartItem => {
-            const product = products.find(p => p.id === cartItem.product_id);
-      
-            return {
-              id: cartItem.id,          // cart item ID
-              quantity: cartItem.quantity,
-              product                   // full product object
-            };
-          }).filter(item => item.product); // safety
-      
-          setCart(enrichedCart);
+            const res = await fetch("http://localhost:5002/api/cart");
+            if (!res.ok) throw new Error("Failed to fetch cart");
+        
+            const cartItems = await res.json();
+            const enrichedCart = cartItems.map(cartItem => {
+                const product = products.find(p => p.id === cartItem.product_id);
+                return {
+                    id: cartItem.id,
+                    quantity: cartItem.quantity,
+                    product
+                };
+            }).filter(item => item.product);
+        
+            setCart(enrichedCart);
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      };
-      useEffect(() => {
+    };
+
+    useEffect(() => {
         if (products.length > 0) {
             fetchCartItems();
         }
     }, [products]);
+
     const handleAddToCart = async (product, quantity = 1) => {
         try {
             const res = await fetch('http://localhost:5002/api/cart', {
@@ -114,8 +125,6 @@ const BuyingPage = () => {
             }
             
             const newCartItem = await res.json();
-            
-            // Update local cart state
             const existingItem = cart.find(item => item.product.id === product.id);
             if (existingItem) {
                 setCart(cart.map(item => 
@@ -141,50 +150,45 @@ const BuyingPage = () => {
         const newQuantity = item.quantity + change;
       
         if (newQuantity <= 0) {
-          setCart(cart.filter(i => i.id !== cartItemId));
-          return;
+            setCart(cart.filter(i => i.id !== cartItemId));
+            return;
         }
       
         try {
-          const res = await fetch(`http://localhost:5002/api/cart/${cartItemId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ quantity: newQuantity })
-          });
+            const res = await fetch(`http://localhost:5002/api/cart/${cartItemId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ quantity: newQuantity })
+            });
       
-          if (!res.ok) throw new Error("Failed to update quantity");
+            if (!res.ok) throw new Error("Failed to update quantity");
       
-          const updatedItem = await res.json();
-      
-          // ✅ ONLY update quantity, keep product
-          setCart(cart.map(item =>
-            item.id === cartItemId
-              ? { ...item, quantity: updatedItem.quantity }
-              : item
-          ));
+            const updatedItem = await res.json();
+            setCart(cart.map(item =>
+                item.id === cartItemId
+                ? { ...item, quantity: updatedItem.quantity }
+                : item
+            ));
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      };
+    };
       
-      const removeFromCart = async (cartItemId) => {
-        console.log("Deleting cart item with ID:", cartItemId);
+    const removeFromCart = async (cartItemId) => {
         try {
-          const res = await fetch(`http://localhost:5002/api/cart/${cartItemId}`, {
-            method: "DELETE"
-          });
+            const res = await fetch(`http://localhost:5002/api/cart/${cartItemId}`, {
+                method: "DELETE"
+            });
       
-          if (!res.ok && res.status !== 204) {
-            throw new Error("Failed to delete cart item");
-          }
+            if (!res.ok && res.status !== 204) {
+                throw new Error("Failed to delete cart item");
+            }
       
-          setCart(cart.filter(item => item.id !== cartItemId));
+            setCart(cart.filter(item => item.id !== cartItemId));
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      };
-      
-      
+    };
 
     const getTotalPrice = () => {
         return cart.reduce((total, item) => total + (item.product.prix * item.quantity), 0);
@@ -192,39 +196,150 @@ const BuyingPage = () => {
 
     const checkoutthing = async () => {
         try {
-          const product_ids = cart.map(item => item.product.id);
-          const body = {
-            name: "My Shop",
-            accumulated_price: getTotalPrice(),
-            product_ids
-          };
-      
-          const res = await fetch('http://localhost:5002/api/checkout', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-          });
-      
-          const data = await res.json();
-      
-          if (!res.ok) {
-            throw new Error(data.error || 'Checkout failed');
-          }
-      
-          console.log('Checkout success:', data);
-      
-          // Refresh the page after successful checkout
-          window.location.reload();
-      
+            const product_ids = cart.map(item => item.product.id);
+        
+            const body = {
+                name: cart[0]?.product?.nom_fabricant || "Unknown",
+                accumulated_price: getTotalPrice(),
+                product_ids
+            };
+        
+            const res = await fetch('http://localhost:5002/api/checkout', {
+                method: 'POST',
+                headers: {
+                'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+        
+            const data = await res.json();
+        
+            if (!res.ok) {
+                throw new Error(data.error || 'Checkout failed');
+            }
+        
+            console.log('Checkout success:', data);
+            window.location.reload();
+        
         } catch (error) {
-          console.error('Checkout error:', error.message);
+            console.error('Checkout error:', error.message);
         }
-      };
-      
-    // Get unique manufacturers
-    const manufacturers = [...new Set(products.map(p => p.nom_fabricant))].filter(Boolean);
+    };
+
+    // Fetch manufacturers from deals API
+    const fetchManufacturers = async () => {
+        try {
+            const response = await fetch('http://localhost:5002/api/manufacturers/manufacturers');
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Manufacturers with deals:', data);
+                setManufacturers(data); // Store full objects with deal_count and total_business
+            } else {
+                console.error('Failed to fetch manufacturers from deals API');
+            }
+        } catch (error) {
+            console.error('Error fetching manufacturers:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchManufacturers();
+    }, []);
+
+    // Fetch deals for a manufacturer
+    const fetchManufacturerDeals = async (manufacturerName) => {
+        try {
+            setLoadingDeals(true);
+            console.log(`Fetching deals for: ${manufacturerName}`);
+            
+            const response = await fetch(`http://localhost:5002/api/manufacturers/deals?manufacturer=${encodeURIComponent(manufacturerName)}`);
+            
+            console.log('Response status:', response.status);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Deals data received:', data);
+                
+                // Format the data for display
+                const formattedDeals = data.map(deal => ({
+                    id: deal.id,
+                    manufacturer: deal.manufacturer,
+                    date: deal.date,
+                    amount: deal.amount,
+                    status: deal.status,
+                    payment_method: deal.payment_method,
+                    products: deal.products || [],
+                    items: deal.items || []
+                }));
+                
+                setDeals(formattedDeals);
+                setSelectedManufacturerDeals(manufacturerName);
+            } else {
+                console.error('Failed to fetch deals, status:', response.status);
+                // Fallback to mock data
+                console.log('Using mock data as fallback');
+                const mockDealsForManufacturer = mockDeals.filter(d => d.manufacturer === manufacturerName);
+                setDeals(mockDealsForManufacturer);
+                setSelectedManufacturerDeals(manufacturerName);
+            }
+        } catch (error) {
+            console.error('Network error fetching deals:', error);
+            // Use mock data on network error
+            const mockDealsForManufacturer = mockDeals.filter(d => d.manufacturer === manufacturerName);
+            setDeals(mockDealsForManufacturer.length > 0 ? mockDealsForManufacturer : [
+                {
+                    id: 1,
+                    manufacturer: manufacturerName,
+                    date: new Date().toISOString().split('T')[0],
+                    amount: Math.floor(Math.random() * 20000) + 5000,
+                    status: "Completed",
+                    products: ["Product A", "Product B"],
+                    payment_method: "Cash"
+                }
+            ]);
+            setSelectedManufacturerDeals(manufacturerName);
+        } finally {
+            setLoadingDeals(false);
+        }
+    };
+
+    // Generate PDF contract
+    const generateContract = async (dealId) => {
+        try {
+            const response = await fetch(`http://localhost:5002/api/manufacturers/contracts/generate/${dealId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `contract-${dealId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                alert('Contract generated successfully!');
+            } else {
+                alert('Failed to generate contract');
+            }
+        } catch (error) {
+            console.error('Error generating contract:', error);
+            alert('Error generating contract');
+        }
+    };
+
+    // Mock deals data (replace with actual API call)
+    const mockDeals = [
+        { id: 1, manufacturer: "Pfizer", date: "2024-01-15", amount: 15000, status: "Completed", products: ["Product A", "Product B"] },
+        { id: 2, manufacturer: "Novartis", date: "2024-02-20", amount: 22000, status: "Pending", products: ["Product C"] },
+        { id: 3, manufacturer: "Roche", date: "2024-03-10", amount: 18000, status: "Completed", products: ["Product D", "Product E", "Product F"] },
+    ];
 
     // Filter products
     const filteredProducts = products.filter(product => {
@@ -233,6 +348,16 @@ const BuyingPage = () => {
         const matchesManufacturer = !selectedManufacturer || product.nom_fabricant === selectedManufacturer;
         return matchesSearch && matchesManufacturer;
     });
+
+    // Helper function to show product names from IDs
+    const getProductNames = (productIds) => {
+        if (!productIds || !Array.isArray(productIds)) return "No products";
+        
+        return productIds.map(id => {
+            const product = products.find(p => p.id === id);
+            return product ? product.nom : `Product ${id}`;
+        }).join(', ');
+    };
 
     if (loading) {
         return (
@@ -366,14 +491,23 @@ const BuyingPage = () => {
                 {/* Page Content */}
                 <main className="p-6">
                     <div className="space-y-6 animate-fade-in">
-                        {/* Header */}
-                        <div>
-                            <h1 className="text-3xl font-bold text-light-900 dark:text-dark-50 mb-2">
-                                Products
-                            </h1>
-                            <p className="text-light-600 dark:text-dark-400">
-                                Parcourez et commandez des produits pour votre stock
-                            </p>
+                        {/* Header with Manufacturers Button */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold text-light-900 dark:text-dark-50 mb-2">
+                                    Products
+                                </h1>
+                                <p className="text-light-600 dark:text-dark-400">
+                                    Parcourez et commandez des produits pour votre stock
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowManufacturersModal(true)}
+                                className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-3 rounded-lg transition-all font-medium"
+                            >
+                                <Users className="w-5 h-5" />
+                                View Manufacturers & Deals
+                            </button>
                         </div>
 
                         {/* Search and Filter */}
@@ -397,7 +531,7 @@ const BuyingPage = () => {
                                         className="w-full pl-10 pr-8 py-3 bg-light-200 dark:bg-dark-800 border border-light-300 dark:border-dark-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-light-900 dark:text-dark-50 appearance-none cursor-pointer"
                                     >
                                         <option value="">All Manufacturers</option>
-                                        {manufacturers.map(manufacturer => (
+                                        {productManufacturers.map(manufacturer => (
                                             <option key={manufacturer} value={manufacturer}>
                                                 {manufacturer}
                                             </option>
@@ -473,6 +607,208 @@ const BuyingPage = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Manufacturers & Deals Modal */}
+            {showManufacturersModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="glass rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+                        <div className="p-6 border-b border-light-300 dark:border-dark-700">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-2xl font-bold text-light-900 dark:text-dark-50 flex items-center gap-3">
+                                    <Users className="w-6 h-6" />
+                                    Manufacturers & Deals
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setShowManufacturersModal(false);
+                                        setSelectedManufacturerDeals(null);
+                                        setDeals([]);
+                                    }}
+                                    className="p-2 hover:bg-light-200 dark:hover:bg-dark-800 rounded-lg transition-all"
+                                >
+                                    <X className="w-5 h-5 text-light-900 dark:text-dark-50" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[70vh]">
+                            {!selectedManufacturerDeals ? (
+                                <div>
+                                    <h3 className="text-lg font-semibold text-light-900 dark:text-dark-50 mb-4">
+                                        Select a Manufacturer to View Deals
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {manufacturers.length > 0 ? (
+                                            manufacturers.map((manufacturer) => (
+                                                <button
+                                                    key={manufacturer.name}
+                                                    onClick={() => fetchManufacturerDeals(manufacturer.name)}
+                                                    className="bg-light-200 dark:bg-dark-800 p-4 rounded-lg hover:bg-light-300 dark:hover:bg-dark-700 transition-all text-left"
+                                                >
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <div className="w-10 h-10 bg-primary-500 rounded-lg flex items-center justify-center">
+                                                            <Users className="w-5 h-5 text-white" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="font-bold text-light-900 dark:text-dark-50">
+                                                                {manufacturer.name}
+                                                            </h4>
+                                                            <div className="flex items-center gap-4 mt-1">
+                                                                <span className="text-xs bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 px-2 py-1 rounded">
+                                                                    {manufacturer.deal_count || 0} deals
+                                                                </span>
+                                                                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">
+                                                                    {manufacturer.total_business || 0} DA
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm text-light-600 dark:text-dark-400 mt-2">
+                                                        Click to view deals and generate contracts
+                                                    </p>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="col-span-3 text-center py-12">
+                                                <Users className="w-16 h-16 text-light-400 dark:text-dark-500 mx-auto mb-4" />
+                                                <p className="text-lg font-medium text-light-600 dark:text-dark-400 mb-2">
+                                                    No manufacturers found
+                                                </p>
+                                                <p className="text-sm text-light-500 dark:text-dark-500">
+                                                    Complete a checkout first to see manufacturers
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedManufacturerDeals(null);
+                                                    setDeals([]);
+                                                }}
+                                                className="flex items-center gap-2 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 mb-2"
+                                            >
+                                                <ChevronRight className="w-4 h-4 rotate-180" />
+                                                Back to Manufacturers
+                                            </button>
+                                            <h3 className="text-xl font-bold text-light-900 dark:text-dark-50">
+                                                Deals with {selectedManufacturerDeals}
+                                            </h3>
+                                        </div>
+                                    </div>
+
+                                    {loadingDeals ? (
+                                        <div className="text-center py-12">
+                                            <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                            <p className="text-light-600 dark:text-dark-400">Loading deals...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {deals.length > 0 ? (
+                                                deals.map((deal) => (
+                                                    <div
+                                                        key={deal.id}
+                                                        className="bg-light-200 dark:bg-dark-800 rounded-lg p-4"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div>
+                                                                <h4 className="font-bold text-light-900 dark:text-dark-50">
+                                                                    Deal #{deal.id}
+                                                                </h4>
+                                                                <p className="text-sm text-light-600 dark:text-dark-400">
+                                                                    Date: {deal.date}
+                                                                </p>
+                                                                <p className="text-sm text-light-600 dark:text-dark-400">
+                                                                    Payment Method: {deal.payment_method}
+                                                                </p>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                                                deal.status === 'Completed'
+                                                                    ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                                                                    : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                                                            }`}>
+                                                                {deal.status}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <p className="text-sm text-light-600 dark:text-dark-400 mb-2">
+                                                                Products: {getProductNames(deal.products)}
+                                                            </p>
+                                                            {deal.items && deal.items.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <p className="text-sm font-medium text-light-700 dark:text-dark-300">Items:</p>
+                                                                    <ul className="text-sm text-light-600 dark:text-dark-400 ml-4">
+                                                                        {deal.items.map((item, index) => (
+                                                                            <li key={index}>
+                                                                                Product ID: {item.product_id}, Quantity: {item.quantity}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+                                                            <p className="text-lg font-bold text-primary-600 dark:text-primary-400 mt-3">
+                                                                Amount: {deal.amount} DA
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-3">
+                                                            <button
+                                                                onClick={() => generateContract(deal.id)}
+                                                                className="flex-1 flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-all font-medium"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                                Generate Contract
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const details = `
+Deal Details:
+- ID: ${deal.id}
+- Manufacturer: ${deal.manufacturer}
+- Date: ${deal.date}
+- Amount: ${deal.amount} DA
+- Status: ${deal.status}
+- Payment Method: ${deal.payment_method}
+- Products: ${getProductNames(deal.products)}
+${deal.items && deal.items.length > 0 ? `- Items: ${deal.items.map(i => `Product ${i.product_id} (Qty: ${i.quantity})`).join(', ')}` : ''}
+                                                                    `.trim();
+                                                                    alert(details);
+                                                                }}
+                                                                className="flex-1 flex items-center justify-center gap-2 bg-light-300 dark:bg-dark-700 hover:bg-light-400 dark:hover:bg-dark-600 text-light-900 dark:text-dark-50 py-2 px-4 rounded-lg transition-all font-medium"
+                                                            >
+                                                                <ClipboardList className="w-4 h-4" />
+                                                                View Details
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="text-center py-12">
+                                                    <FileText className="w-16 h-16 text-light-400 dark:text-dark-500 mx-auto mb-4" />
+                                                    <p className="text-lg font-medium text-light-600 dark:text-dark-400 mb-4">
+                                                        No deals found for {selectedManufacturerDeals}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setDeals(mockDeals.filter(d => d.manufacturer === selectedManufacturerDeals))}
+                                                        className="bg-primary-500 hover:bg-primary-600 text-white py-2 px-6 rounded-lg transition-all font-medium"
+                                                    >
+                                                        Load Sample Data
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Cart Sidebar */}
             <div
@@ -566,13 +902,12 @@ const BuyingPage = () => {
                                 </span>
                             </div>
                             <button
-                              className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg transition-all font-medium"
-                               onClick={checkoutthing}
-                             >
-                             <Check className="w-5 h-5" />
-                             Confirmer la Commande
-                              </button>
-
+                                className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-3 rounded-lg transition-all font-medium"
+                                onClick={checkoutthing}
+                            >
+                                <Check className="w-5 h-5" />
+                                Confirmer la Commande
+                            </button>
                         </div>
                     )}
                 </div>
@@ -591,6 +926,18 @@ const BuyingPage = () => {
                 <div
                     className="fixed inset-0 bg-black/50 z-40"
                     onClick={() => setShowCart(false)}
+                />
+            )}
+
+            {/* Manufacturers Modal Overlay */}
+            {showManufacturersModal && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-45"
+                    onClick={() => {
+                        setShowManufacturersModal(false);
+                        setSelectedManufacturerDeals(null);
+                        setDeals([]);
+                    }}
                 />
             )}
 
@@ -631,7 +978,7 @@ const BuyingPage = () => {
                 .dark .glass {
                     background: rgba(20, 20, 30, 0.9);
                 }
-            }`}</style>
+            `}</style>
         </div>
     );
 };
