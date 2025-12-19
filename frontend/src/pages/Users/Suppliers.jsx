@@ -549,9 +549,21 @@ const BuyingPage = () => {
                                     className="card hover:shadow-2xl transition-all duration-300 group"
                                 >
                                     <div className="text-center mb-4">
-                                        <div className="w-full h-32 bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900 dark:to-primary-800 rounded-lg flex items-center justify-center mb-4">
-                                            <Package className="w-16 h-16 text-primary-600 dark:text-primary-400" />
-                                        </div>
+                                    <div className="w-full h-32 rounded-lg mb-4 overflow-hidden bg-light-200 dark:bg-dark-800 flex items-center justify-center">
+                                                     {product.image_url ? (
+                                                    <img
+                                                   src={product.image_url}
+                                                   alt={product.nom}
+                                                   className="w-full h-full object-cover"
+                                                   onError={(e) => {
+                                                   e.currentTarget.onerror = null;
+                                                   e.currentTarget.src = '/placeholder-product.png';
+                                              }}
+                                          />
+                                             ) : (
+                                          <Package className="w-16 h-16 text-primary-600 dark:text-primary-400" />
+                                         )}
+                                         </div>
                                         <h3 className="text-lg font-bold text-light-900 dark:text-dark-50 mb-2">
                                             {product.nom}
                                         </h3>
